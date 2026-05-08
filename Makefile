@@ -1,5 +1,3 @@
-export HF_TOKEN = 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
-
 #-------------------------------- VARIABLES ----------------------------------#
 
 NAME		=	call-me-maybe
