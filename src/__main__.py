@@ -9,7 +9,7 @@ def get_function_name(slm: Small_LLM_Model, prompt: str, functions: list[dict[st
             "You are a function calling assistant.\n" +
             f"You have these functions at your disposal : {json.dumps(functions)}.\n" +
             f"Here is the user request: {prompt}.\n"
-            "Generate the appropriate function name."
+            "Generate the function name corresponding to the request."
     )
 
     token_ids: list[int] = slm.encode(llm_prompt)[0].tolist()
@@ -22,11 +22,25 @@ def get_function_name(slm: Small_LLM_Model, prompt: str, functions: list[dict[st
 
         for logit_id in sorted_indexes:
 
-            decoded: str = slm.decode([logits[logit_id]])
+            decoded: str = slm.decode([logit_id])
 
-            if any([f["name"].startswith(name_generated + decoded) for f in functions]):
+            if decoded and any([f["name"].startswith(name_generated + decoded) for f in functions]):
                 token_ids.append(logit_id)
                 name_generated += decoded
                 break
 
     return name_generated
+
+
+def main() -> None:
+
+    func_def: str = "data/input/functions_definition.json"
+    with open(func_def) as json_file:
+        functions = json.load(json_file)
+    slm: Small_LLM_Model = Small_LLM_Model()
+    prompt = "Add the numbers 2 and 3"
+    print(get_function_name(slm, prompt, functions))
+
+
+if __name__ == "__main__":
+    main()
