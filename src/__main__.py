@@ -7,7 +7,7 @@ def get_function_name(slm: Small_LLM_Model, prompt: str, functions: list[dict[st
 
     llm_prompt: str = (
             "You are a function calling assistant.\n" +
-            f"You have these functions at your disposal : {json.dumps(functions)}.\n" +
+            f"You have these functions at your disposal : {functions}.\n" +
             f"Here is the user request: {prompt}.\n"
             "Generate the function name corresponding to the request."
     )
