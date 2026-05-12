@@ -1,48 +1,70 @@
 import numpy as np
 import json
-import re
+import regex
+import time
+import os
 from .llm_sdk import Small_LLM_Model
 from pydantic import BaseModel, Field
 
 
 class Constraint(BaseModel):
 
-    functions: list[dict[str, str | dict[str, str]]]
-    slm: Small_LLM_Model
+    functions: list[dict[str, str | dict[str, str | dict[str, str]]]]
     regexes: dict[str, str] = Field(default={
-        "number": r"[\d]*(\.[\d]+)",
+        "number": r"[-]?[\d]+([.][\d]+)?",
         "boolean": r"true|false",
-        "string": r'"([^"\\]*)"'
+        "string": r'[^"]*'
     })
 
-    def get_single_parameter(self, llm_prompt: str, regex: str) -> str:
+    def get_single_parameter(self, slm: Small_LLM_Model, llm_prompt: str, pattern: str, end_char: str) -> str:
 
-        token_ids: list[int] = self.slm.encode(llm_prompt)[0].tolist()
+        token_ids: list[int] = slm.encode(llm_prompt)[0].tolist()
         gen: str = ""
         finished: bool = False
+        max_chars: int = 200
 
         while not finished:
 
-            logits: list[float] = self.slm.get_logits_from_input_ids(token_ids)
+            if len(gen) > max_chars:
+                break
+
+            logits: list[float] = slm.get_logits_from_input_ids(token_ids)
             sorted_indexes = np.argsort(logits)[::-1]
+
+            if len(gen) == 0:
+                for i in sorted_indexes:
+                    decoded: str = slm.decode([i])
+                    if decoded.startswith(" ") and decoded.strip().isalpha():
+                        logits[i] = -float("inf")
+                sorted_indexes = np.argsort(logits)[::-1]
 
             for logit_id in sorted_indexes:
 
-                decoded: str = self.slm.decode([logit_id])
+                decoded = slm.decode([logit_id])
+                # print(f"decoded : {decoded}")
 
-                if decoded == self.slm._tokenizer.eos_token:
-
+                is_complete = regex.fullmatch(pattern, gen) is not None
+                if is_complete and end_char in decoded.strip():
+                    ending: str = ""
+                    for c in decoded.strip():
+                        if c == end_char:
+                            break
+                        ending += c
+                    gen += ending
                     finished = True
                     break
 
-                if re.match(regex, (gen + decoded)):
+                if regex.fullmatch(pattern, gen + decoded, partial=True):
 
                     gen += decoded
+                    token_ids.append(logit_id)
                     break
+
+                # time.sleep(0.5)
 
         return gen
 
-    def get_parameters(self, prompt: str, function_name: str) -> list[str]:
+    def get_parameters(self, slm: Small_LLM_Model, prompt: str, function_name: str) -> dict[str, str | float | bool]:
 
         for f_id in self.functions:
 
@@ -59,27 +81,60 @@ class Constraint(BaseModel):
             parameters: {function['parameters']}
 
         The parameters must have the same type as in the function. \
-        Once you finished generating a parameter, generate an end of sequence token. \
+        Numbers or boolean parameters must be inside parentheses, example : "(42)". \
+        Strings must be inside double quotes, example : "hello". \
+
+        Examples:
+            - Function: fn_substitute_string_with_regex
+            - User request: replace all digits with NUM
+            - Parameters: (source_string: "hello 42", regex: "([\\d]+)", replacement: "NUM")
+
+            - Function: fn_substitute_string_with_regex
+            - User request: replace all vowels with an asterisk symbol
+            - Parameters: (source_string: "hello world", regex: "([aeiou])", replacement: "*")
 
         User request: {prompt}.
 
         Parameters: ("""
 
-        parameters: list[str] = []
+        parameters: dict[str, str | float | bool] = {}
         types: list[str] = [f["type"] for f in function["parameters"].values()]
 
         for p_id, p_type in enumerate(types):
 
-            param: str = self.get_single_parameter(llm_prompt, self.regexes[p_type])
+            param: str = ""
+            param_name: str = ([k for k in function["parameters"].keys()][p_id])
+            # print(f"parameter name: {param_name}")
+            llm_prompt += param_name + ": "
+            if p_type == "string":
+                llm_prompt += '"'
+                param = '"'
+                content: str = self.get_single_parameter(slm, llm_prompt, self.regexes[p_type], '"')
+
+                if len(content) > 0 and content[0] == " ":
+                    if len(content) > 1 and content[1] != " ":
+                        content = content[1:]
+
+                param += content + '"'
+                param = param.strip('"').replace("\\'", "'")
+            else:
+                param = self.get_single_parameter(slm, llm_prompt, self.regexes[p_type], ")")
+            # print(f"parameter: {param}")
             llm_prompt += param
             if p_id == len(types) - 1:
                 llm_prompt += ")"
             else:
                 llm_prompt += ", "
+            if p_type == "bool":
+                parameters[param_name] = bool(param)
+            elif p_type == "number":
+                parameters[param_name] = float(param)
+            else:
+                parameters[param_name] = param
 
         return parameters
 
-    def get_function_name(self, prompt: str) -> str:
+    def get_function_name(self, slm: Small_LLM_Model, prompt: str) -> str:
 
         llm_prompt: str = f"""
             You are a function calling assistant.
@@ -88,17 +143,17 @@ class Constraint(BaseModel):
             Call the appropriate function name.
             Function name: """
 
-        token_ids: list[int] = self.slm.encode(llm_prompt)[0].tolist()
+        token_ids: list[int] = slm.encode(llm_prompt)[0].tolist()
         name_generated: str = ""
 
         while name_generated not in [func["name"] for func in self.functions]:
 
-            logits: list[float] = self.slm.get_logits_from_input_ids(token_ids)
+            logits: list[float] = slm.get_logits_from_input_ids(token_ids)
             sorted_indexes = np.argsort(logits)[::-1]
 
             for logit_id in sorted_indexes:
 
-                decoded: str = self.slm.decode([logit_id])
+                decoded: str = slm.decode([logit_id])
 
                 if decoded and any([f["name"].startswith(name_generated + decoded) for f in self.functions]):
                     token_ids.append(logit_id)
@@ -108,101 +163,27 @@ class Constraint(BaseModel):
         return name_generated
 
 
-# def get_parameters(slm: Small_LLM_Model, prompt: str, function: dict[str, str | dict[str, str]]) -> list[str | float]:
-# 
-#     llm_prompt = f"""You are a function calling assistant. \
-#     Your job is to return the parameters of the function in the \
-#     prompt in a tuple format
-# 
-#     function:
-#         name: {function['name']}
-#         description: {function['description']}
-#         parameters: {function['parameters']}
-# 
-#     Rules:
-#         - Output the parameters in a tuple format inside parenthesis \
-#         - The parameters must have the same type as in the function \
-#     parameters
-#         - If the parameter is a string, do not generate commas between the characters \
-#         - For string replacement, the parameters' values should always correspond to what is asked in the prompt, not templates \
-#         - If there are numbers in a string of the prompt, make sure to preserve them as is \
-#         - The number of commas generated should be the same as the number of parameters asked, except if there are commas in a parameter of the prompt \
-#         - The parameters must be in order as the function's definition
-# 
-#     User request: {prompt}
-# 
-#     the parameters are: ("""
-# 
-#     token_ids: list[int] = slm.encode(llm_prompt)[0].tolist()
-#     func_params: list[str] = [f["type"] for f in function["parameters"].values()]
-#     regex: str = r"-?[\d]+(\.[\d]+)?"
-#     param_nb: int = 1
-#     param_gen: str = ""
-#     finished: bool = False
-# 
-#     while not finished:
-# 
-#         logits: list[float] = slm.get_logits_from_input_ids(token_ids)
-#         sorted_indexes = np.argsort(logits)[::-1]
-# 
-#         for logit_id in sorted_indexes:
-# 
-#             decoded: str = slm.decode([logit_id])
-#             print(f"decoded : {decoded}\n")
-# 
-#             if ")" in decoded:
-#                 finished = True
-#                 break
-# 
-#             if decoded == "" or decoded == " ":
-#                 continue
-# 
-#             if decoded == ",":
-#                 if param_nb < len(func_params):
-#                     param_nb += 1
-#                     param_gen += decoded
-#                     token_ids.append(logit_id)
-#                     break
-# 
-#             if func_params[param_nb - 1] == "number" and re.match(regex, (param_gen + decoded)):
-#                 print("decoded accepted for number")
-#                 param_gen += decoded
-#                 token_ids.append(logit_id)
-#                 break
-# 
-#             if func_params[param_nb - 1] == "string":
-#                 print("decoded accepted for string")
-#                 param_gen += decoded
-#                 token_ids.append(logit_id)
-#                 break
-# 
-#     param_gen = param_gen.strip()
-#     parameters: list[str] = [p for p in param_gen.split(",") if p]
-#     ret: list[str | float] = []
-#     for n in range(len(func_params)):
-#         if func_params[n] == "number":
-#             ret.append(float(parameters[n]))
-#         elif func_params[n] == "string":
-#             ret.append(parameters[n].strip())
-#     return ret
-
-
 def main() -> None:
 
     func_def: str = "data/input/functions_definition.json"
     with open(func_def) as json_file:
         functions = json.load(json_file)
+    slm: Small_LLM_Model = Small_LLM_Model()
     constr: Constraint = Constraint(
-        functions=functions,
-        slm=Small_LLM_Model()
+        functions=functions
     )
     test_prompts: str = "data/input/function_calling_tests.json"
     with open(test_prompts) as prompt_file:
         prompts = json.load(prompt_file)
+    dicts: list[dict[str, str | float | bool]] = []
     for pr in prompts:
-        function_name: str = constr.get_function_name(pr)
-        parameters: list[str] = constr.get_parameters(pr, function_name)
-        print(f"function name: {function_name} -> parameters: {parameters}")
+        function_name: str = constr.get_function_name(slm, pr)
+        parameters: dict[str, str | float | bool] = constr.get_parameters(slm, pr, function_name)
+        dicts.append(parameters)
+        print(f"function name: {function_name} -> parameters: {parameters}\n")
+    os.makedirs("data/output", exist_ok=True)
+    with open("data/output/function_calling_results.json", "w") as output_file:
+        output_file.write(json.dumps(dicts, indent=4))
 
 
 if __name__ == "__main__":
