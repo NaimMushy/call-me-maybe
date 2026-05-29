@@ -19,21 +19,19 @@ def check_args(args: list[str]) -> dict[str, str]:
             continue
 
         if not (match := regex.match(r"--(functions_definition|input|output)", args[arg])):
-            raise ValueError(f"Invalid flag {args[arg]}!")
+            raise ValueError(f"Invalid flag '{args[arg]}'!")
 
         if match.group(1) in files_dict.keys():
-            raise ValueError(f"Flag {match.group(1)} is already defined!")
+            raise ValueError(f"Flag '{match.group(1)}' is already defined!")
 
         if arg == len(args) - 1 or args[arg + 1].startswith("--"):
-            raise ValueError(f"No associated value given for flag {args[arg]}!")
+            raise ValueError(f"No associated value given for flag '{args[arg]}'!")
 
         files_dict[match.group(1)] = args[arg + 1]
-        print(f"associated value {args[arg + 1]} to flag {match.group(1), args[arg]}")
 
     if "input" not in files_dict.keys():
         files_dict["input"] = "data/input/function_calling_tests.json"
     if "output" not in files_dict.keys():
-        print("didn't find output in dict")
         files_dict["output"] = "data/output/function_calling_results.json"
     if "functions_definition" not in files_dict.keys():
         files_dict["functions_definition"] = "data/input/functions_definition.json"
@@ -55,13 +53,17 @@ def verify_files(fc_def_path: str, pr_path: str) -> [list[dict], list[dict]]:
         for param in func.keys():
 
             if param in mandatory:
+
                 if param in func_params:
-                    raise ValueError(f"Parameter {param} has already been defined!")
+                    raise ValueError(f"Parameter '{param}' has already been defined!")
 
                 func_params.add(param)
 
             else:
-                raise ValueError(f"Invalid parameter {param} in function definition")
+                raise ValueError(f"Invalid parameter '{param}' in function definition")
+
+        if any([m not in func_params for m in mandatory]):
+            raise ValueError(f"Missing parameters for function definition '{func}'!")
 
     with open(pr_path) as prompts_file:
 
@@ -70,10 +72,10 @@ def verify_files(fc_def_path: str, pr_path: str) -> [list[dict], list[dict]]:
     for pr in test_prompts:
 
         if len([k for k in pr.keys()]) > 1:
-            raise ValueError(f"Invalid prompt {pr} in function calling file - Too many keys")
+            raise ValueError(f"Invalid prompt '{pr}' in function calling file - Too many keys")
 
         if "prompt" not in pr.keys():
-            raise ValueError(f"Invalid key in prompt dict {pr} - Should be 'prompt'")
+            raise ValueError(f"Invalid key in prompt dict '{pr}' - Should be 'prompt'")
 
     return functions, test_prompts
 
@@ -238,8 +240,6 @@ class Constraint(BaseModel):
 
 def main() -> None:
 
-    dict_to_str = {"hello": "test", "number": 35}.__str__()
-    print(dict_to_str, type(dict_to_str))
     try:
         paths: dict[str, str] = check_args(sys.argv[1:])
         functions, prompts = verify_files(paths["functions_definition"], paths["input"])
@@ -249,11 +249,11 @@ def main() -> None:
 
     constr: Constraint = Constraint(functions=functions)
     slm: Small_LLM_Model = Small_LLM_Model()
-    dicts: list[dict[str, str]] = []
+    dicts: list[dict[str, str | dict]] = []
     for pr in prompts:
-        json_obj: dict[str, str] = {"prompt": pr["prompt"]}
+        json_obj: dict[str, str | dict] = {"prompt": pr["prompt"]}
         json_obj["name"] = constr.get_function_name(slm, pr)
-        json_obj["parameters"] = constr.get_parameters(slm, pr, json_obj["name"]).__str__()
+        json_obj["parameters"] = constr.get_parameters(slm, pr, json_obj["name"])
         dicts.append(json_obj)
         print(f"function name: {json_obj['name']} -> parameters: {json_obj['parameters']}\n")
     if len(paths["output"].split("/")) > 1:

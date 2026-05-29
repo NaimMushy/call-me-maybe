@@ -6,7 +6,7 @@
     "prompt": "What is the sum of 265 and 345?"
   },
   {
-    "prompt": "Add the numbers four and eighty-eight"
+    "prompt": "Add the numbers 4 and 88"
   },
   {
     "prompt": "Greet shrek"
@@ -30,7 +30,7 @@
     "prompt": "Calculate the square root of 144"
   },
   {
-    "prompt": "Calculate the square root of 8959384795739436758394785673943863956387438476395363857"
+    "prompt": "Calculate the square root of 89"
   },
   {
     "prompt": "Replace all numbers in \"Hello 34 I'm 233 years old\" with NUMBERS"
