@@ -6,10 +6,16 @@
     "prompt": "What is the sum of 265 and 345?"
   },
   {
+    "prompt": "Add the numbers 4 and 88"
+  },
+  {
     "prompt": "Greet shrek"
   },
   {
     "prompt": "Greet john"
+  },
+  {
+    "prompt": "Greet big fihhh"
   },
   {
     "prompt": "Reverse the string 'hello'"
@@ -24,6 +30,9 @@
     "prompt": "Calculate the square root of 144"
   },
   {
+    "prompt": "Calculate the square root of 89"
+  },
+  {
     "prompt": "Replace all numbers in \"Hello 34 I'm 233 years old\" with NUMBERS"
   },
   {
@@ -31,5 +40,8 @@
   },
   {
     "prompt": "Substitute the word 'cat' with 'dog' in 'The cat sat on the mat with another cat'"
+  },
+  {
+    "prompt": "Substitute all the 'p' by 'c' in the word 'papa'"
   }
 ]

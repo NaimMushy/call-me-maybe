@@ -2,38 +2,28 @@ import numpy as np
 import json
 import regex
 import os
-import sys
 from .llm_sdk import Small_LLM_Model
 from pydantic import BaseModel, Field
 
 
-def check_args(args: list[str]) -> dict[str, str]:
+def args_check(args: list[str]) -> dict[str, str]:
 
-    if len(args) > 6:
+    if len(args) > 3:
         raise ValueError("Too many arguments!")
 
-    files_dict: dict[str, str] = {}
-    for arg in range(len(args)):
+    for arg in args:
 
-        if arg % 2 == 1:
-            continue
+        if not (match := regex.match(r"--([functions_definition|input|output]) (.)+"), arg):
+            raise ValueError(f"Invalid argument {arg}!")
 
-        if not (match := regex.match(r"--(functions_definition|input|output)", args[arg])):
-            raise ValueError(f"Invalid flag {args[arg]}!")
+        if match.group(1) in files_dict:
+            raise ValueError(f"Argument {match.group(1)} is already defined!")
 
-        if match.group(1) in files_dict.keys():
-            raise ValueError(f"Flag {match.group(1)} is already defined!")
-
-        if arg == len(args) - 1 or args[arg + 1].startswith("--"):
-            raise ValueError(f"No associated value given for flag {args[arg]}!")
-
-        files_dict[match.group(1)] = args[arg + 1]
-        print(f"associated value {args[arg + 1]} to flag {match.group(1), args[arg]}")
+        files_dict[match.group(1)] = match.group(2)
 
     if "input" not in files_dict.keys():
         files_dict["input"] = "data/input/function_calling_tests.json"
     if "output" not in files_dict.keys():
-        print("didn't find output in dict")
         files_dict["output"] = "data/output/function_calling_results.json"
     if "functions_definition" not in files_dict.keys():
         files_dict["functions_definition"] = "data/input/functions_definition.json"
@@ -47,11 +37,11 @@ def verify_files(fc_def_path: str, pr_path: str) -> [list[dict], list[dict]]:
 
         functions = json.load(func_file)
 
+    func_params: set = set()
     mandatory: list[str] = ["name", "description", "parameters", "returns"]
 
     for func in functions:
 
-        func_params: set = set()
         for param in func.keys():
 
             if param in mandatory:
@@ -59,7 +49,7 @@ def verify_files(fc_def_path: str, pr_path: str) -> [list[dict], list[dict]]:
                     raise ValueError(f"Parameter {param} has already been defined!")
 
                 func_params.add(param)
-
+            
             else:
                 raise ValueError(f"Invalid parameter {param} in function definition")
 
@@ -71,7 +61,7 @@ def verify_files(fc_def_path: str, pr_path: str) -> [list[dict], list[dict]]:
 
         if len([k for k in pr.keys()]) > 1:
             raise ValueError(f"Invalid prompt {pr} in function calling file - Too many keys")
-
+        
         if "prompt" not in pr.keys():
             raise ValueError(f"Invalid key in prompt dict {pr} - Should be 'prompt'")
 
@@ -135,7 +125,7 @@ class Constraint(BaseModel):
 
         return gen
 
-    def get_parameters(self, slm: Small_LLM_Model, prompt: dict, function_name: str) -> dict[str, str | float | bool]:
+    def get_parameters(self, slm: Small_LLM_Model, prompt: str, function_name: str) -> dict[str, str | float | bool]:
 
         for f_id in self.functions:
 
@@ -144,29 +134,27 @@ class Constraint(BaseModel):
 
         llm_prompt = f"""You are a function calling assistant. \
         Your job is to return the parameters of the function in the \
-        prompt. \
+        prompt.
 
-        function: \
-            name: {function['name']} \
-            description: {function['description']} \
-            parameters: {function['parameters']} \
+        function:
+            name: {function['name']}
+            description: {function['description']}
+            parameters: {function['parameters']}
 
         The parameters must have the same type as in the function. \
         Numbers or boolean parameters must be inside parentheses, example : "(42)". \
         Strings must be inside double quotes, example : "hello". \
 
-        Examples: \
-            - Function: fn_substitute_string_with_regex \
-            - User request: replace all digits with NUM \
-            - Parameters: (source_string: "hello 42", regex: "([\\d]+)", replacement: "NUM") \
+        Examples:
+            - Function: fn_substitute_string_with_regex
+            - User request: replace all digits with NUM
+            - Parameters: (source_string: "hello 42", regex: "([\\d]+)", replacement: "NUM")
 
-            - Function: fn_substitute_string_with_regex \
-            - User request: replace all vowels with an asterisk symbol \
-            - Parameters: (source_string: "hello world", regex: "([aeiou])", replacement: "*") \
+            - Function: fn_substitute_string_with_regex
+            - User request: replace all vowels with an asterisk symbol
+            - Parameters: (source_string: "hello world", regex: "([aeiou])", replacement: "*")
 
-        Do not include the user request in your answer. \
-
-        Here is your user request: {prompt}. \
+        User request: {prompt}.
 
         Parameters: ("""
 
@@ -207,7 +195,7 @@ class Constraint(BaseModel):
 
         return parameters
 
-    def get_function_name(self, slm: Small_LLM_Model, prompt: dict) -> str:
+    def get_function_name(self, slm: Small_LLM_Model, prompt: str) -> str:
 
         llm_prompt: str = f"""
             You are a function calling assistant.
@@ -238,27 +226,17 @@ class Constraint(BaseModel):
 
 def main() -> None:
 
-    dict_to_str = {"hello": "test", "number": 35}.__str__()
-    print(dict_to_str, type(dict_to_str))
     try:
-        paths: dict[str, str] = check_args(sys.argv[1:])
-        functions, prompts = verify_files(paths["functions_definition"], paths["input"])
-    except Exception as err:
-        print(f"Caught {err.__class__.__name__}: {err}")
-        return None
-
-    constr: Constraint = Constraint(functions=functions)
-    slm: Small_LLM_Model = Small_LLM_Model()
-    dicts: list[dict[str, str]] = []
+        check_args(sys.argv)
+        functions, prompts = verify_files()
+    dicts: list[dict[str, str | float | bool]] = []
     for pr in prompts:
-        json_obj: dict[str, str] = {"prompt": pr["prompt"]}
-        json_obj["name"] = constr.get_function_name(slm, pr)
-        json_obj["parameters"] = constr.get_parameters(slm, pr, json_obj["name"]).__str__()
-        dicts.append(json_obj)
-        print(f"function name: {json_obj['name']} -> parameters: {json_obj['parameters']}\n")
-    if len(paths["output"].split("/")) > 1:
-        os.makedirs("/".join(paths["output"].split("/")[:-1]), exist_ok=True)
-    with open(paths["output"], "w") as output_file:
+        function_name: str = constr.get_function_name(slm, pr)
+        parameters: dict[str, str | float | bool] = constr.get_parameters(slm, pr, function_name)
+        dicts.append(parameters)
+        print(f"function name: {function_name} -> parameters: {parameters}\n")
+    os.makedirs("data/output", exist_ok=True)
+    with open("data/output/function_calling_results.json", "w") as output_file:
         output_file.write(json.dumps(dicts, indent=4))
 
 
