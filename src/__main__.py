@@ -5,6 +5,7 @@ import os
 import sys
 from .llm_sdk import Small_LLM_Model
 from pydantic import BaseModel, Field, model_validator
+from typing_extensions import Self as self
 
 
 class Function(BaseModel):
@@ -15,7 +16,7 @@ class Function(BaseModel):
     returns: dict[str, str]
 
     @model_validator(mode="after")
-    def validate_parameters(self) -> None:
+    def validate_parameters(self) -> self:
 
         valid_types: list[str] = [
             "int", "number", "num", "integer", "float",
@@ -64,8 +65,10 @@ class Function(BaseModel):
                     f"for parameter '{param_name}' of function '{self.name}'"
                 )
 
+        return self
+
     @model_validator(mode="after")
-    def validate_return_types(self) -> None:
+    def validate_return_types(self) -> self:
 
         valid_types: list[str] = [
             "int", "number", "num", "integer", "float",
@@ -102,6 +105,8 @@ class Function(BaseModel):
                     f"Invalid type '{param_value}' "
                     f"for return value of function '{self.name}'"
                 )
+
+        return self
 
 
 def check_args(args: list[str]) -> dict[str, str]:
@@ -150,7 +155,9 @@ def check_args(args: list[str]) -> dict[str, str]:
 
     if "functions_definition" not in files_dict.keys():
 
-        files_dict["functions_definition"] = "data/input/functions_definition.json"
+        files_dict["functions_definition"] = (
+            "data/input/functions_definition.json"
+        )
 
     return files_dict
 
@@ -158,7 +165,7 @@ def check_args(args: list[str]) -> dict[str, str]:
 def verify_files(
     fc_def_path: str,
     pr_path: str
-) -> [list[Function], list[dict[str, str]]]:
+) -> tuple[list[Function], list[dict[str, str]]]:
 
     with open(fc_def_path) as func_file:
 
@@ -174,7 +181,7 @@ def verify_files(
 
     for func in loaded_functions:
 
-        func_params: set = set()
+        func_params: set[str] = set()
 
         for param, param_value in func.items():
 
@@ -421,7 +428,11 @@ class Constraint(BaseModel):
 
         return parameters
 
-    def get_function_name(self, slm: Small_LLM_Model, prompt: dict) -> str:
+    def get_function_name(
+        self,
+        slm: Small_LLM_Model,
+        prompt: dict[str, str]
+    ) -> str:
 
         llm_prompt: str = f"""
             You are a function calling assistant.
@@ -475,16 +486,20 @@ def main() -> None:
 
     constr: Constraint = Constraint(functions=functions)
     slm: Small_LLM_Model = Small_LLM_Model()
-    dicts: list[dict[str, str | dict]] = []
+    dicts: list[
+        dict[str, str | dict[str, str | float | bool]]
+    ] = []
 
     for pr in prompts:
 
-        json_obj: dict[str, str | dict[str, str]] = {"prompt": pr["prompt"]}
+        json_obj: dict[str, str | dict[str, str | float | bool]] = {
+            "prompt": pr["prompt"]
+        }
         json_obj["name"] = constr.get_function_name(slm, pr)
         json_obj["parameters"] = constr.get_parameters(
             slm,
             pr,
-            json_obj["name"]
+            str(json_obj["name"])
         )
 
         dicts.append(json_obj)
