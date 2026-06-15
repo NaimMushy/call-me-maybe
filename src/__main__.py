@@ -185,6 +185,13 @@ def verify_files(
 
         for param, param_value in func.items():
 
+            if not param_value:
+
+                raise ValueError(
+                    f"The value of the parameter '{param}' "
+                    "has not been defined"
+                )
+
             if param in mandatory:
 
                 if param in func_params:
@@ -218,6 +225,10 @@ def verify_files(
 
         test_prompts = json.load(prompts_file)
 
+    if not test_prompts:
+
+        raise ValueError(f"No prompts given in input file '{pr_path}'")
+
     for pr in test_prompts:
 
         if len([k for k in pr.keys()]) > 1:
@@ -231,6 +242,19 @@ def verify_files(
 
             raise ValueError(
                 f"Invalid key in prompt dict '{pr}' - Should be 'prompt'"
+            )
+
+        if not isinstance(pr["prompt"], str):
+
+            raise ValueError(
+                f"Invalid prompt '{pr['prompt']}' - Should be a string"
+            )
+
+        if not pr["prompt"]:
+
+            raise ValueError(
+                f"Invalid prompt '{pr['prompt']}' "
+                "- Should not be an empty string"
             )
 
     return functions, test_prompts
@@ -349,15 +373,25 @@ class Constraint(BaseModel):
         Strings must be inside double quotes, example : "hello". \
 
         Examples: \
+            - Function: fn_get_square_root \
+            - User request: calculate the square root of 42. \
+            - Parameters: (a: 42) \
+
             - Function: fn_substitute_string_with_regex \
-            - User request: replace all digits with NUM \
+            - User request: replace all digits in 'hello 42' with NUM \
             - Parameters: (source_string: "hello 42", \
             regex: "([\\d]+)", replacement: "NUM") \
 
             - Function: fn_substitute_string_with_regex \
-            - User request: replace all vowels with an asterisk symbol \
-            - Parameters: (source_string: "hello world", \
+            - User request: replace all vowels in '' with an asterisk symbol \
+            - Parameters: (source_string: "''", \
             regex: "([aeiou])", replacement: "*") \
+
+            - Function: fn_substitute_string_with_regex \
+            - User request: substitute the string 'hello world'
+            by the string 'hello planet' \
+            - Parameters: (source_string: "'hello world'", \
+            regex: "(hello world)", replacement: "hello planet") \
 
         Do not include the user request in your answer. \
 

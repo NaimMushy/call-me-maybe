@@ -16,3 +16,6 @@ dependencies = [
     "transformers>=5.8.0",
     "types-regex>=2026.5.9.20260518",
 ]
+[[tool.mypy.overrides]]
+module = "src.llm_sdk.*"
+ignore_errors = true

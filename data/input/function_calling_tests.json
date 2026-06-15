@@ -45,7 +45,7 @@
     "prompt": "Substitute all the 'p' by 'c' in the word 'papa'"
   },
   {
-    "prompt": ""
+    "prompt": "Replace all vowels in '' with spaces"
   },
   {
     "prompt": "Substitute 'Add the number 2 and 3' with 'Calculate the square root of 24'"

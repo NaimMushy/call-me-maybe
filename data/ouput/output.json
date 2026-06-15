@@ -19,7 +19,7 @@
         "prompt": "Add the numbers four and eighty-eight",
         "name": "fn_add_numbers",
         "parameters": {
-            "a": 42.0,
+            "a": 4.0,
             "b": 88.0
         }
     },
@@ -93,7 +93,7 @@
         "name": "fn_substitute_string_with_regex",
         "parameters": {
             "source_string": "Programming is fun",
-            "regex": "aeiou",
+            "regex": "([aeiou])",
             "replacement": "*"
         }
     },
@@ -116,11 +116,12 @@
         }
     },
     {
-        "prompt": "",
-        "name": "fn_add_numbers",
+        "prompt": "Replace all vowels in '' with spaces",
+        "name": "fn_substitute_string_with_regex",
         "parameters": {
-            "a": 42.0,
-            "b": 3.0
+            "source_string": "''",
+            "regex": "([aeiou])",
+            "replacement": ""
         }
     },
     {
@@ -128,7 +129,7 @@
         "name": "fn_substitute_string_with_regex",
         "parameters": {
             "source_string": "Add the number 2 and 3",
-            "regex": "([0-9]+)",
+            "regex": "(\\d+)",
             "replacement": "Calculate the square root of 24"
         }
     }
