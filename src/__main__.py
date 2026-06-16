@@ -3,8 +3,10 @@ import json
 import regex
 import argparse
 import os
+import textwrap
 from .llm_sdk import Small_LLM_Model
 from pydantic import BaseModel, Field, model_validator
+from typing import Any
 from typing_extensions import Self as self
 
 
@@ -139,55 +141,33 @@ def check_args() -> argparse.Namespace:
     args: argparse.Namespace = parser.parse_args()
     return args
 
-#     if len(args) > 6:
-#         raise ValueError("Too many arguments!")
-# 
-#     files_dict: dict[str, str] = {}
-# 
-#     for arg in range(len(args)):
-# 
-#         if arg % 2 == 1:
-# 
-#             continue
-# 
-#         if not (match := regex.match(
-#             r"--(functions_definition|input|output)",
-#             args[arg]
-#         )):
-# 
-#             raise ValueError(f"Invalid flag '{args[arg]}'!")
-# 
-#         if match.group(1) in files_dict.keys():
-# 
-#             raise ValueError(f"Flag '{match.group(1)}' is already defined!")
-# 
-#         if arg == len(args) - 1 or args[arg + 1].startswith("--"):
-# 
-#             raise ValueError(
-#                 f"No associated value given for flag '{args[arg]}'!"
-#             )
-# 
-#         if len(args[arg + 1].split("/")) < 1:
-# 
-#             raise ValueError(f"Invalid path given for flag '{args[arg]}'")
-# 
-#         files_dict[match.group(1)] = args[arg + 1]
-# 
-#     if "input" not in files_dict.keys():
-# 
-#         files_dict["input"] = "data/input/function_calling_tests.json"
-# 
-#     if "output" not in files_dict.keys():
-# 
-#         files_dict["output"] = "data/output/function_calling_results.json"
-# 
-#     if "functions_definition" not in files_dict.keys():
-# 
-#         files_dict["functions_definition"] = (
-#             "data/input/functions_definition.json"
-#         )
-# 
-#     return files_dict
+
+def open_json(
+    path: str
+) -> Any:
+
+    try:
+        with open(path) as file:
+
+            loaded_json = json.load(file)
+
+    except json.JSONDecodeError as jerr:
+
+        raise ValueError(f"Invalid JSON file: {jerr}")
+
+    except OSError as oserr:
+
+        raise ValueError(
+            f"Impossible to open the json file '{path}' : {oserr}"
+        )
+
+    except UnicodeDecodeError as uderr:
+
+        raise ValueError(
+            f"Non utf-8 characters in the json file '{path}' : {uderr}"
+        )
+
+    return loaded_json
 
 
 def verify_files(
@@ -195,9 +175,7 @@ def verify_files(
     pr_path: str
 ) -> tuple[list[Function], list[dict[str, str]]]:
 
-    with open(fc_def_path) as func_file:
-
-        loaded_functions = json.load(func_file)
+    loaded_functions: list[dict[str, Any]] = open_json(fc_def_path)
 
     if not loaded_functions:
 
@@ -249,9 +227,7 @@ def verify_files(
             returns=func["returns"]
         ))
 
-    with open(pr_path) as prompts_file:
-
-        test_prompts = json.load(prompts_file)
+    test_prompts: list[dict[str, str]] = open_json(pr_path)
 
     if not test_prompts:
 
@@ -294,14 +270,8 @@ class Constraint(BaseModel):
     regexes: dict[str, str] = Field(default={
         "number": r"[-]?[\d]+([.][\d]+)?",
         "boolean": r"true|false",
-        "string": r'[^"]*'
+        "string": r'([^"\\]|\\.){0,1000}'
     })
-    # regexes: dict[str, str] = Field(default={
-    #     "number": r'-?(?:0|[1-9]\d{0,100})(?:\.\d{1,100})?',
-    #     "integer": r'-?(?:0|[1-9]\d{0,100})',
-    #     "boolean": r'(?:true|false)',
-    #     "string": r'"(?:[^"\\]|\\.){0,1000}"'
-    # })
     types: dict[str, str] = Field(default={
         "string": "string",
         "str": "string",
@@ -335,25 +305,14 @@ class Constraint(BaseModel):
             logits: list[float] = slm.get_logits_from_input_ids(token_ids)
             sorted_indexes = np.argsort(logits)[::-1]
 
-            if len(gen) == 0:
-
-                for i in sorted_indexes:
-
-                    decoded: str = slm.decode([i])
-
-                    if decoded.startswith(" ") and decoded.strip().isalpha():
-                        logits[i] = -float("inf")
-
-                sorted_indexes = np.argsort(logits)[::-1]
-
             for logit_id in sorted_indexes:
 
                 decoded = slm.decode([logit_id])
-                # print(f"decoded : {decoded}")
 
-                is_complete = regex.fullmatch(pattern, gen) is not None
-
-                if is_complete and end_char in decoded.strip():
+                if (
+                    regex.fullmatch(pattern, gen)
+                    and end_char in decoded.strip()
+                ):
 
                     ending: str = ""
 
@@ -376,8 +335,6 @@ class Constraint(BaseModel):
 
                     break
 
-                # time.sleep(0.5)
-
         return gen
 
     def get_parameters(
@@ -392,52 +349,43 @@ class Constraint(BaseModel):
             if f_id.name == function_name:
                 function: Function = f_id
 
-        llm_prompt = f"""You are a function calling assistant. \
-        Your job is to return the parameters of the function in the \
-        prompt. \
+        llm_prompt = textwrap.dedent(f"""
+        Generate the parameters of the function in the prompt.
 
-        function: \
-            name: {function.name} \
-            description: {function.description} \
-            parameters: {function.parameters} \
+        function name: {function.name}
+        function description: {function.description}
+        function parameters: {function.parameters}
 
-        The parameters must have the same type as in the function. \
-        Numbers or boolean parameters \
-        must be inside parentheses, example : "(42)". \
-        Strings must be inside double quotes, example : "hello". \
+        Strings must be inside double quotes, example : "hello".
+        Keep empty strings and literal space/' ' in user request.
+        Separate arguments by commas.
 
-        Examples: \
-            - Function: fn_get_square_root \
-            - User request: calculate the square root of 42. \
-            - Parameters: (42) \
+        Examples:
+        - User request: calculate the square root of forty-two.
+        - Parameters: (a: 42)
 
-            - Function: fn_substitute_string_with_regex \
-            - User request: replace all digits in 'hello 42' with NUM \
-            - Parameters: ("hello 42", "([0-9]+)", "NUM") \
+        - User request: replace all digits in 'hello 42' with NUM
+        - Parameters: (source_string: "hello 42", \
+regex: "([0-9]+)", replacement: "NUM")
 
-            - Function: fn_substitute_string_with_regex \
-            - User request: replace all vowels in '' with spaces \
-            - Parameters: ("", "([aeiouAEIOU])", " ") \
+        - User request: replace all vowels in '' with spaces
+        - Parameters: (source_string: "", \
+regex: "([aeiouAEIOU])", replacement: "' '")
 
-            - Function: fn_substitute_string_with_regex \
-            - User request: substitute the string 'hello world'
-            by the string 'hello planet' \
-            - Parameters: ("hello world", "(hello world)", "hello planet") \
+        Do not include the user request in your answer.
 
-        Do not include the user request in your answer. \
+        Here is your user request: {prompt["prompt"]}.
 
-        Here is your user request: {prompt["prompt"]}. \
-
-        Parameters: ("""
+        Parameters: (""")
 
         parameters: dict[str, str | float | bool] = {}
         types: list[str] = [f["type"] for f in function.parameters.values()]
+        end_char: str = ("," if len(types) > 1 else ")")
 
         for p_id, p_type in enumerate(types):
 
             param: str = ""
             param_name: str = ([k for k in function.parameters.keys()][p_id])
-            # print(f"parameter name: {param_name}")
             llm_prompt += param_name + ": "
 
             if self.types[p_type] == "string":
@@ -465,19 +413,20 @@ class Constraint(BaseModel):
                     slm,
                     llm_prompt,
                     self.regexes[self.types[p_type]],
-                    ")"
+                    end_char
                 )
 
-            # print(f"parameter: {param}")
             llm_prompt += param
 
             if p_id == len(types) - 1:
 
-                llm_prompt += ")"
+                end_char = ")"
+                llm_prompt += end_char
 
             else:
 
-                llm_prompt += ", "
+                end_char = ","
+                llm_prompt += end_char + " "
 
             if self.types[p_type] == "bool":
 
@@ -583,9 +532,15 @@ def main() -> None:
 
         os.makedirs("/".join(paths.output.split("/")[:-1]), exist_ok=True)
 
-    with open(paths.output, "w") as output_file:
+    try:
 
-        output_file.write(json.dumps(dicts, indent=4))
+        with open(paths.output, "w") as output_file:
+
+            output_file.write(json.dumps(dicts, indent=4))
+
+    except OSError as oserr:
+
+        print(f"Caught OSError for output file '{paths.output}' : {oserr}")
 
 
 if __name__ == "__main__":
