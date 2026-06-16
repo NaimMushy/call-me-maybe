@@ -1,8 +1,8 @@
 import numpy as np
 import json
 import regex
+import argparse
 import os
-import sys
 from .llm_sdk import Small_LLM_Model
 from pydantic import BaseModel, Field, model_validator
 from typing_extensions import Self as self
@@ -109,57 +109,85 @@ class Function(BaseModel):
         return self
 
 
-def check_args(args: list[str]) -> dict[str, str]:
+def check_args() -> argparse.Namespace:
 
-    if len(args) > 6:
-        raise ValueError("Too many arguments!")
+    parser: argparse.ArgumentParser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--input",
+        type=str,
+        default="data/input/function_calling_tests.json",
+        help="the path to the prompt input file"
+    )
+    parser.add_argument(
+        "--functions_definition",
+        type=str,
+        default="data/input/functions_definition.json",
+        help="the path to the functions' definition file"
+    )
+    parser.add_argument(
+        "--output",
+        type=str,
+        default="data/output/function_calling_results.json",
+        help="the path to the output file"
+    )
+    parser.add_argument(
+        "--verbose",
+        type=bool,
+        default=False,
+        help="toggle the verbose output log"
+    )
+    args: argparse.Namespace = parser.parse_args()
+    return args
 
-    files_dict: dict[str, str] = {}
-
-    for arg in range(len(args)):
-
-        if arg % 2 == 1:
-
-            continue
-
-        if not (match := regex.match(
-            r"--(functions_definition|input|output)",
-            args[arg]
-        )):
-
-            raise ValueError(f"Invalid flag '{args[arg]}'!")
-
-        if match.group(1) in files_dict.keys():
-
-            raise ValueError(f"Flag '{match.group(1)}' is already defined!")
-
-        if arg == len(args) - 1 or args[arg + 1].startswith("--"):
-
-            raise ValueError(
-                f"No associated value given for flag '{args[arg]}'!"
-            )
-
-        if len(args[arg + 1].split("/")) < 1:
-
-            raise ValueError(f"Invalid path given for flag '{args[arg]}'")
-
-        files_dict[match.group(1)] = args[arg + 1]
-
-    if "input" not in files_dict.keys():
-
-        files_dict["input"] = "data/input/function_calling_tests.json"
-
-    if "output" not in files_dict.keys():
-
-        files_dict["output"] = "data/output/function_calling_results.json"
-
-    if "functions_definition" not in files_dict.keys():
-
-        files_dict["functions_definition"] = (
-            "data/input/functions_definition.json"
-        )
-
-    return files_dict
+#     if len(args) > 6:
+#         raise ValueError("Too many arguments!")
+# 
+#     files_dict: dict[str, str] = {}
+# 
+#     for arg in range(len(args)):
+# 
+#         if arg % 2 == 1:
+# 
+#             continue
+# 
+#         if not (match := regex.match(
+#             r"--(functions_definition|input|output)",
+#             args[arg]
+#         )):
+# 
+#             raise ValueError(f"Invalid flag '{args[arg]}'!")
+# 
+#         if match.group(1) in files_dict.keys():
+# 
+#             raise ValueError(f"Flag '{match.group(1)}' is already defined!")
+# 
+#         if arg == len(args) - 1 or args[arg + 1].startswith("--"):
+# 
+#             raise ValueError(
+#                 f"No associated value given for flag '{args[arg]}'!"
+#             )
+# 
+#         if len(args[arg + 1].split("/")) < 1:
+# 
+#             raise ValueError(f"Invalid path given for flag '{args[arg]}'")
+# 
+#         files_dict[match.group(1)] = args[arg + 1]
+# 
+#     if "input" not in files_dict.keys():
+# 
+#         files_dict["input"] = "data/input/function_calling_tests.json"
+# 
+#     if "output" not in files_dict.keys():
+# 
+#         files_dict["output"] = "data/output/function_calling_results.json"
+# 
+#     if "functions_definition" not in files_dict.keys():
+# 
+#         files_dict["functions_definition"] = (
+#             "data/input/functions_definition.json"
+#         )
+# 
+#     return files_dict
 
 
 def verify_files(
@@ -380,18 +408,18 @@ class Constraint(BaseModel):
             - Function: fn_substitute_string_with_regex \
             - User request: replace all digits in 'hello 42' with NUM \
             - Parameters: (source_string: "hello 42", \
-            regex: "([\\d]+)", replacement: "NUM") \
+            regex: "([0-9]+)", replacement: "NUM") \
 
             - Function: fn_substitute_string_with_regex \
             - User request: replace all vowels in '' with an asterisk symbol \
-            - Parameters: (source_string: "''", \
+            - Parameters: (source_string: "", \
             regex: "([aeiou])", replacement: "*") \
 
             - Function: fn_substitute_string_with_regex \
             - User request: substitute the string 'hello world'
             by the string 'hello planet' \
-            - Parameters: (source_string: "'hello world'", \
-            regex: "(hello world)", replacement: "hello planet") \
+            - Parameters: (source_string: "hello world", \
+            regex: "hello world", replacement: "hello planet") \
 
         Do not include the user request in your answer. \
 
@@ -503,14 +531,14 @@ def main() -> None:
 
     try:
 
-        paths: dict[str, str] = check_args(sys.argv[1:])
+        paths = check_args()
 
         functions: list[Function]
         prompts: list[dict[str, str]]
 
         functions, prompts = verify_files(
-            paths["functions_definition"],
-            paths["input"]
+            paths.functions_definition,
+            paths.input
         )
 
     except Exception as err:
@@ -538,16 +566,17 @@ def main() -> None:
 
         dicts.append(json_obj)
 
-        print(
-            f"function name: {json_obj['name']} "
-            f"-> parameters: {json_obj['parameters']}\n"
-        )
+        if paths.verbose:
+            print(
+                f"function name: {json_obj['name']} "
+                f"-> parameters: {json_obj['parameters']}\n"
+            )
 
-    if len(paths["output"].split("/")) > 1:
+    if len(paths.output.split("/")) > 1:
 
-        os.makedirs("/".join(paths["output"].split("/")[:-1]), exist_ok=True)
+        os.makedirs("/".join(paths.output.split("/")[:-1]), exist_ok=True)
 
-    with open(paths["output"], "w") as output_file:
+    with open(paths.output, "w") as output_file:
 
         output_file.write(json.dumps(dicts, indent=4))
 
