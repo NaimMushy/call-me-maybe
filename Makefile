@@ -1,8 +1,3 @@
-# ifdef CACHE_DIR
-# export UV_CACHE_DIR=$(CACHE_DIR)/uv_cache
-# export UV_PROJECT_ENVIRONMENT=$(CACHE_DIR)/venv
-# export HF_HOME=$(CACHE_DIR)/hf_cache
-# endif
 
 #-------------------------------- VARIABLES ----------------------------------#
 
@@ -12,7 +7,7 @@ SRC			=	src
 VENV		=	.venv
 MODEL		=	llm_sdk
 
-FUNCIONS	?=	"data/input/functions_definition.json"
+FUNCTIONS	?=	"data/input/functions_definition.json"
 INPUT		?=	"data/input/function_calling_tests.json"
 OUTPUT		?=	"data/ouput/output.json"
 
@@ -29,10 +24,10 @@ install: check_uv
 	uv sync
 
 run: check_uv
-	@uv run python -m $(SRC) --functions_definition $(FUNCIONS) --input $(INPUT) --output $(OUTPUT)
+	@uv run python -m $(SRC) --functions_definition $(FUNCTIONS) --input $(INPUT) --output $(OUTPUT)
 
 debug: check_uv
-	@uv run python -m pdb $(SRC) --functions_definition $(FUNCIONS) --input $(INPUT) --output $(OUTPUT)
+	@uv run python -m pdb $(SRC) --functions_definition $(FUNCTIONS) --input $(INPUT) --output $(OUTPUT)
 
 test: check_uv
 	uv run pytest tests/ -v
