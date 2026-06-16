@@ -405,7 +405,7 @@ regex: "([aeiouAEIOU])", replacement: "' '")
                         content = content[1:]
 
                 param += content + '"'
-                param = param.strip('"').replace("\\'", "'")
+                param = param.strip('"')
 
             else:
 
@@ -536,11 +536,16 @@ def main() -> None:
 
         with open(paths.output, "w") as output_file:
 
-            output_file.write(json.dumps(dicts, indent=4))
+            json_string = json.dumps(dicts, indent=4).replace("\\\\", "\\")
+            output_file.write(json_string)
 
     except OSError as oserr:
 
         print(f"Caught OSError for output file '{paths.output}' : {oserr}")
+
+    except Exception as err:
+
+        print(f"Caught {err.__class__.__name__}: {err}")
 
 
 if __name__ == "__main__":
