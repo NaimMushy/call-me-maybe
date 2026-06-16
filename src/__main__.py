@@ -296,6 +296,12 @@ class Constraint(BaseModel):
         "boolean": r"true|false",
         "string": r'[^"]*'
     })
+    # regexes: dict[str, str] = Field(default={
+    #     "number": r'-?(?:0|[1-9]\d{0,100})(?:\.\d{1,100})?',
+    #     "integer": r'-?(?:0|[1-9]\d{0,100})',
+    #     "boolean": r'(?:true|false)',
+    #     "string": r'"(?:[^"\\]|\\.){0,1000}"'
+    # })
     types: dict[str, str] = Field(default={
         "string": "string",
         "str": "string",
@@ -403,23 +409,20 @@ class Constraint(BaseModel):
         Examples: \
             - Function: fn_get_square_root \
             - User request: calculate the square root of 42. \
-            - Parameters: (a: 42) \
+            - Parameters: (42) \
 
             - Function: fn_substitute_string_with_regex \
             - User request: replace all digits in 'hello 42' with NUM \
-            - Parameters: (source_string: "hello 42", \
-            regex: "([0-9]+)", replacement: "NUM") \
+            - Parameters: ("hello 42", "([0-9]+)", "NUM") \
 
             - Function: fn_substitute_string_with_regex \
-            - User request: replace all vowels in '' with an asterisk symbol \
-            - Parameters: (source_string: "", \
-            regex: "([aeiou])", replacement: "*") \
+            - User request: replace all vowels in '' with spaces \
+            - Parameters: ("", "([aeiouAEIOU])", " ") \
 
             - Function: fn_substitute_string_with_regex \
             - User request: substitute the string 'hello world'
             by the string 'hello planet' \
-            - Parameters: (source_string: "hello world", \
-            regex: "hello world", replacement: "hello planet") \
+            - Parameters: ("hello world", "(hello world)", "hello planet") \
 
         Do not include the user request in your answer. \
 
@@ -480,9 +483,13 @@ class Constraint(BaseModel):
 
                 parameters[param_name] = bool(param)
 
-            elif self.types[p_type] == "number":
+            elif p_type in ["number", "num", "float"]:
 
                 parameters[param_name] = float(param)
+
+            elif p_type in ["integer", "int"]:
+
+                parameters[param_name] = int(param)
 
             else:
 
