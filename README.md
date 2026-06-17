@@ -1,4 +1,4 @@
-*This project has been created as part of the 42 curriculum by ibady.*
+`*This project has been created as part of the 42 curriculum by ibady.*
 
 # ==== 🎶 CALL ME MAYBE 🎶 ====
 
@@ -54,14 +54,16 @@ If you wish to specify paths for the input files or output file, here are the op
   ``uv run python -m src 
   [--input <path to the file with the prompts>] 
   [--functions_definition <path to the file with the functions' definition>] 
-  [--output <path to the file where the output should be>]``<br><br>
+  [--output <path to the file where the output should be>]``<br>
+  Another optional flag (``--verbose <True/False>``) is also available should you wish to have an output log during the generation.<br><br>
 -> You can define the Makefile variables on the command line:<br>
   ``make run 
   FUNCTIONS="<path to the functions's definition file>"
   INPUT="<path to the prompt file>"
-  OUTPUT="<path to the output file>"``<br>
+  OUTPUT="<path to the output file>"
+  VERBOSE=True/False``<br>
 
-  Another optional flag (``--verbose <True/False>``) is also available should you wish to have an output log during the generation.<br>
+  
 
 ### Resources
 
