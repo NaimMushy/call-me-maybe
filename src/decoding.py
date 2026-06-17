@@ -161,16 +161,15 @@ class Constraint(BaseModel):
         Strings must be inside double quotes, example : "hello".
         Keep empty strings and literal space/' ' in user request.
         In regexes, "spaces"=" ", "asterisks"="*" and so on.
-        When substituting entire strings, the regex IS the entire string.
         Separate arguments by commas.
 
         Examples:
         - User request: calculate the square root of forty-two.
         - Parameters: (a: 42)
 
-        - User request: replace all vowels in '' with spaces
-        - Parameters: (source_string: "''", \
-regex: "([aeiouAEIOU])", replacement: "' '")
+        - User request: replace all vowels in '' with asterisks
+        - Parameters: (source_string: "", \
+regex: "([aeiouAEIOU])", replacement: "*")
 
         - User request: replace all digits in 'hello 42' with NUM
         - Parameters: (source_string: "hello 42", \

@@ -10,6 +10,7 @@ MODEL		=	llm_sdk
 FUNCTIONS	?=	"data/input/functions_definition.json"
 INPUT		?=	"data/input/function_calling_tests.json"
 OUTPUT		?=	"data/output/function_calling_results.json"
+VERBOSE		?=	False
 
 EXCLUDE				=	--exclude $(VENV),$(MODEL)
 EXCLUDE_MYPY		=	--exclude $(VENV) --exclude $(MODEL)
@@ -24,10 +25,10 @@ install: check_uv
 	uv sync
 
 run: check_uv
-	@uv run python -m $(SRC) --functions_definition $(FUNCTIONS) --input $(INPUT) --output $(OUTPUT)
+	@uv run python -m $(SRC) --functions_definition $(FUNCTIONS) --input $(INPUT) --output $(OUTPUT) --verbose $(VERBOSE)
 
 debug: check_uv
-	@uv run python -m pdb $(SRC) --functions_definition $(FUNCTIONS) --input $(INPUT) --output $(OUTPUT)
+	@uv run python -m pdb $(SRC) --functions_definition $(FUNCTIONS) --input $(INPUT) --output $(OUTPUT) --verbose $(VERBOSE)
 
 test: check_uv
 	uv run pytest tests/ -v
