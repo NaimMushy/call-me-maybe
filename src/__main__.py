@@ -536,8 +536,7 @@ def main() -> None:
 
         with open(paths.output, "w") as output_file:
 
-            json_string = json.dumps(dicts, indent=4).replace("\\\\", "\\")
-            output_file.write(json_string)
+            output_file.write(json.dumps(dicts, indent=4))
 
     except OSError as oserr:
 
